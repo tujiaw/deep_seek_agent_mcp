@@ -1,5 +1,3 @@
-
-
 # 加载 .env 文件中的环境变量
 
     
@@ -17,6 +15,7 @@ from pydantic import BaseModel, Field
 import os
 import requests
 from dotenv import load_dotenv
+from datetime import datetime
 
 load_dotenv()
 
@@ -35,6 +34,7 @@ async def get_weather(adcode: str) -> Dict:
         units: 温度单位 (metric: 摄氏度, imperial: 华氏度)
     """
     try:
+        print(f"获取天气信息: {adcode}")
         api_key = os.getenv("OPENWEATHER_API_KEY")
         params = {"city": adcode, "key": api_key}
 
@@ -44,6 +44,57 @@ async def get_weather(adcode: str) -> Dict:
     except Exception as e:
         print(f"获取天气信息失败: {str(e)}")
         raise
+
+
+@mcp.tool()
+async def power_shell(command: str) -> Dict:
+    """
+    执行windows命令工具
+
+    Args:
+        command: 执行的命令
+    """
+    try:
+        import asyncio
+        import subprocess
+
+        print(f"执行命令: {command}")
+        process = await asyncio.create_subprocess_shell(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        stdout, stderr = await process.communicate()
+        
+        # Try different encodings for Windows command output
+        encodings = ['gbk', 'cp936', 'utf-8']
+        stdout_text = ""
+        stderr_text = ""
+        
+        for encoding in encodings:
+            try:
+                stdout_text = stdout.decode(encoding) if stdout else ""
+                stderr_text = stderr.decode(encoding) if stderr else ""
+                break
+            except UnicodeDecodeError:
+                continue
+        
+        return {
+            "stdout": stdout_text,
+            "stderr": stderr_text,
+            "returncode": process.returncode
+        }
+    except Exception as e:
+        print(f"执行命令失败: {str(e)}")
+        raise
+
+
+@mcp.tool()
+async def now_time() -> Dict:
+    """
+    获取当前时间
+    """
+    return {"time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
 
 def create_starlette_app(mcp_server: Server, *, debug: bool = False) -> Starlette:

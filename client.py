@@ -213,12 +213,13 @@ class WeatherAssistant:
         if self.agent:
             return
             
-        print("正在初始化天气查询Agent...")
+        print("Agent开始执行...")
         self.agent = Agent(
-            name="天气助手",
+            name="Agent助手",
             instructions=(
-                "你是一个专业的天气助手，可以帮助用户查询和分析天气信息。"
-                "用户可能会询问天气状况、天气预报等信息，请根据用户的问题选择合适的工具进行查询。"
+                "你是一个专业的Agent助手，"
+                "你可以熟练的使用已有工具完成用户复杂的任务。首先，你会规划好任务，然后一步一步的完成规划好的任务。"
+                "最后，你会总结任务的执行结果，并给出最终的输出"
             ),
             mcp_servers=self.server_manager.get_servers(),
             model_settings=Config.MODEL_SETTINGS
@@ -273,11 +274,8 @@ class WeatherAssistant:
             print(result.final_output)
         return result.final_output
 
-class WeatherApp:
-    """天气应用类，负责整个应用的生命周期管理"""
-    
+class AgentApp:
     def __init__(self):
-        """初始化天气应用"""
         self.model_provider = DeepSeekModelProvider()
         self.server_manager = MCPServerManager()
         self.assistant = None
@@ -323,20 +321,12 @@ class WeatherApp:
         await self.server_manager.cleanup_servers()
         
     async def run_interactive(self) -> None:
-        """运行交互式查询循环"""
-        # 打印欢迎信息
-        print("===== DeepSeek MCP 天气查询系统 =====")
-        print("请输入自然语言查询，例如：")
-        print(" - \"北京天气怎么样\"")
-        print(" - \"查询上海未来5天天气预报\"")
-        print("输入'quit'或'退出'结束程序")
-        print("======================================\n")
-        
         try:
             # 交互式查询循环
             while True:
                 # 获取用户输入
-                user_query = input("\n请输入您的天气查询(输入'quit'或'退出'结束程序): ").strip()
+                print("=======================start========================")
+                user_query = input("请输入您的问题(输入'quit'或'退出'结束程序): ").strip()
 
                 # 检查退出条件
                 if user_query.lower() in ["q", "quit", "退出"]:
@@ -358,7 +348,7 @@ class WeatherApp:
 
 async def main():
     """应用程序主入口"""
-    app = WeatherApp()
+    app = AgentApp()
     try:
         await app.setup()
         await app.run_interactive()
