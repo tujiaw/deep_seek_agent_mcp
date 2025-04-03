@@ -81,19 +81,19 @@ class DeepSeekModelProvider(ModelProvider):
 class MCPServerManager:
     """MCP服务器管理类，负责创建、连接和清理MCP服务器"""
     
-    _servers: List[MCPServer] = []
+    def __init__(self):
+        """初始化服务器管理器"""
+        self._servers: List[MCPServer] = []
     
-    @classmethod
-    def get_servers(cls) -> List[MCPServer]:
+    def get_servers(self) -> List[MCPServer]:
         """获取所有已创建的服务器列表
         
         Returns:
             服务器列表
         """
-        return cls._servers
+        return self._servers
     
-    @classmethod
-    async def create_sse_server(cls, name: str, url: str, cache_tools: bool = False, env: dict = None) -> MCPServer:
+    async def create_sse_server(self, name: str, url: str, cache_tools: bool = False, env: dict = None) -> MCPServer:
         """创建并连接MCP SSE服务器
         
         Args:
@@ -122,11 +122,10 @@ class MCPServerManager:
         await server.connect()
         print(f"MCP服务器 {name} 连接成功！")
         
-        cls._servers.append(server)
+        self._servers.append(server)
         return server
     
-    @classmethod
-    async def create_stdio_server(cls, name: str, command: str, args: List[str], cache_tools: bool = False, env: dict = None) -> MCPServer:
+    async def create_stdio_server(self, name: str, command: str, args: List[str], cache_tools: bool = False, env: dict = None) -> MCPServer:
         """创建并连接MCP STDIO服务器
         
         Args:
@@ -156,20 +155,19 @@ class MCPServerManager:
         await server.connect()
         print(f"MCP服务器 {name} 连接成功！")
         
-        cls._servers.append(server)
+        self._servers.append(server)
         return server
     
-    @classmethod
-    async def cleanup_servers(cls) -> None:
+    async def cleanup_servers(self) -> None:
         """清理所有MCP服务器资源"""
-        for server in cls._servers:
+        for server in self._servers:
             try:
                 await server.cleanup()
                 print(f"MCP服务器 {server.name} 资源清理成功！")
             except Exception as e:
                 print(f"清理MCP服务器 {server.name} 资源时出错: {e}")
                 traceback.print_exc()
-        cls._servers.clear()
+        self._servers.clear()
 
 class ResponseHandler:
     """响应处理类，处理模型响应数据"""
@@ -198,13 +196,15 @@ class ResponseHandler:
 class WeatherAssistant:
     """天气助手类，封装天气查询功能"""
     
-    def __init__(self, model_provider: ModelProvider):
+    def __init__(self, model_provider: ModelProvider, server_manager: MCPServerManager):
         """初始化天气助手
         
         Args:
             model_provider: 模型提供器实例
+            server_manager: MCP服务器管理器实例
         """
         self.model_provider = model_provider
+        self.server_manager = server_manager
         self.agent = None
         self.response_handler = ResponseHandler()
 
@@ -220,7 +220,7 @@ class WeatherAssistant:
                 "你是一个专业的天气助手，可以帮助用户查询和分析天气信息。"
                 "用户可能会询问天气状况、天气预报等信息，请根据用户的问题选择合适的工具进行查询。"
             ),
-            mcp_servers=MCPServerManager.get_servers(),
+            mcp_servers=self.server_manager.get_servers(),
             model_settings=Config.MODEL_SETTINGS
         )
 
@@ -236,7 +236,7 @@ class WeatherAssistant:
             handoff_input_filter=None
         )
 
-    async def run_query(self, query: str, streaming: bool = True) -> str:
+    async def run_query(self, query: str, streaming: bool = True) -> str | list[str]:
         """处理天气查询请求
         
         Args:
@@ -270,9 +270,7 @@ class WeatherAssistant:
                 max_turns=Config.MAX_TURNS,
                 run_config=run_config
             )
-                        
-        print("\n===== 完整天气信息 =====")
-        print(result.final_output)
+            print(result.final_output)
         return result.final_output
 
 class WeatherApp:
@@ -280,14 +278,12 @@ class WeatherApp:
     
     def __init__(self):
         """初始化天气应用"""
-        self.model_provider = None
+        self.model_provider = DeepSeekModelProvider()
+        self.server_manager = MCPServerManager()
         self.assistant = None
         
     async def setup(self) -> None:
         """设置应用环境"""
-        # 创建模型提供器
-        self.model_provider = DeepSeekModelProvider()
-        
         # 从配置文件加载MCP服务器配置
         try:
             with open(Config.MCP_CONFIG_PATH, 'r') as f:
@@ -299,7 +295,7 @@ class WeatherApp:
                     # 根据配置类型创建不同类型的服务器
                     if 'url' in server_config:
                         # 创建SSE服务器
-                        await MCPServerManager.create_sse_server(
+                        await self.server_manager.create_sse_server(
                             name=server_name,
                             url=server_config['url'],
                             cache_tools=False,
@@ -307,7 +303,7 @@ class WeatherApp:
                         )
                     elif 'command' in server_config and 'args' in server_config:
                         # 创建STDIO服务器
-                        await MCPServerManager.create_stdio_server(
+                        await self.server_manager.create_stdio_server(
                             name=server_name,
                             command=server_config['command'],
                             args=server_config['args'],
@@ -319,12 +315,12 @@ class WeatherApp:
             traceback.print_exc()
         
         # 创建天气助手实例
-        self.assistant = WeatherAssistant(self.model_provider)
+        self.assistant = WeatherAssistant(self.model_provider, self.server_manager)
         await self.assistant.initialize()
     
     async def cleanup(self) -> None:
         """清理应用资源"""
-        await MCPServerManager.cleanup_servers()
+        await self.server_manager.cleanup_servers()
         
     async def run_interactive(self) -> None:
         """运行交互式查询循环"""
