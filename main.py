@@ -81,8 +81,19 @@ class DeepSeekModelProvider(ModelProvider):
 class MCPServerManager:
     """MCP服务器管理类，负责创建、连接和清理MCP服务器"""
     
-    @staticmethod
-    async def create_sse_server(name: str, url: str, cache_tools: bool = False, env: dict = None) -> MCPServer:
+    _servers: List[MCPServer] = []
+    
+    @classmethod
+    def get_servers(cls) -> List[MCPServer]:
+        """获取所有已创建的服务器列表
+        
+        Returns:
+            服务器列表
+        """
+        return cls._servers
+    
+    @classmethod
+    async def create_sse_server(cls, name: str, url: str, cache_tools: bool = False, env: dict = None) -> MCPServer:
         """创建并连接MCP SSE服务器
         
         Args:
@@ -111,10 +122,11 @@ class MCPServerManager:
         await server.connect()
         print(f"MCP服务器 {name} 连接成功！")
         
+        cls._servers.append(server)
         return server
     
-    @staticmethod
-    async def create_stdio_server(name: str, command: str, args: List[str], cache_tools: bool = False, env: dict = None) -> MCPServer:
+    @classmethod
+    async def create_stdio_server(cls, name: str, command: str, args: List[str], cache_tools: bool = False, env: dict = None) -> MCPServer:
         """创建并连接MCP STDIO服务器
         
         Args:
@@ -144,22 +156,20 @@ class MCPServerManager:
         await server.connect()
         print(f"MCP服务器 {name} 连接成功！")
         
+        cls._servers.append(server)
         return server
     
-    @staticmethod
-    async def cleanup_servers(servers: List[MCPServer]) -> None:
-        """清理MCP服务器资源
-        
-        Args:
-            servers: 要清理的MCP服务器列表
-        """
-        for server in servers:
+    @classmethod
+    async def cleanup_servers(cls) -> None:
+        """清理所有MCP服务器资源"""
+        for server in cls._servers:
             try:
                 await server.cleanup()
                 print(f"MCP服务器 {server.name} 资源清理成功！")
             except Exception as e:
                 print(f"清理MCP服务器 {server.name} 资源时出错: {e}")
                 traceback.print_exc()
+        cls._servers.clear()
 
 class ResponseHandler:
     """响应处理类，处理模型响应数据"""
@@ -188,15 +198,13 @@ class ResponseHandler:
 class WeatherAssistant:
     """天气助手类，封装天气查询功能"""
     
-    def __init__(self, model_provider: ModelProvider, servers: List[MCPServer]):
+    def __init__(self, model_provider: ModelProvider):
         """初始化天气助手
         
         Args:
             model_provider: 模型提供器实例
-            servers: MCP服务器列表
         """
         self.model_provider = model_provider
-        self.servers = servers
         self.agent = None
         self.response_handler = ResponseHandler()
 
@@ -212,7 +220,7 @@ class WeatherAssistant:
                 "你是一个专业的天气助手，可以帮助用户查询和分析天气信息。"
                 "用户可能会询问天气状况、天气预报等信息，请根据用户的问题选择合适的工具进行查询。"
             ),
-            mcp_servers=self.servers,
+            mcp_servers=MCPServerManager.get_servers(),
             model_settings=Config.MODEL_SETTINGS
         )
 
@@ -273,7 +281,6 @@ class WeatherApp:
     def __init__(self):
         """初始化天气应用"""
         self.model_provider = None
-        self.servers = []
         self.assistant = None
         
     async def setup(self) -> None:
@@ -289,12 +296,10 @@ class WeatherApp:
             # 根据配置创建MCP服务器
             if 'mcpServers' in mcp_config:
                 for server_name, server_config in mcp_config['mcpServers'].items():
-                    server = None
-                    
                     # 根据配置类型创建不同类型的服务器
                     if 'url' in server_config:
                         # 创建SSE服务器
-                        server = await MCPServerManager.create_sse_server(
+                        await MCPServerManager.create_sse_server(
                             name=server_name,
                             url=server_config['url'],
                             cache_tools=False,
@@ -302,27 +307,24 @@ class WeatherApp:
                         )
                     elif 'command' in server_config and 'args' in server_config:
                         # 创建STDIO服务器
-                        server = await MCPServerManager.create_stdio_server(
+                        await MCPServerManager.create_stdio_server(
                             name=server_name,
                             command=server_config['command'],
                             args=server_config['args'],
                             cache_tools=False,
                             env=server_config.get('env')
                         )
-                    
-                    if server:
-                        self.servers.append(server)
         except Exception as e:
             print(f"加载MCP配置文件时出错: {e}")
             traceback.print_exc()
         
         # 创建天气助手实例
-        self.assistant = WeatherAssistant(self.model_provider, self.servers)
+        self.assistant = WeatherAssistant(self.model_provider)
         await self.assistant.initialize()
     
     async def cleanup(self) -> None:
         """清理应用资源"""
-        await MCPServerManager.cleanup_servers(self.servers)
+        await MCPServerManager.cleanup_servers()
         
     async def run_interactive(self) -> None:
         """运行交互式查询循环"""
@@ -341,8 +343,8 @@ class WeatherApp:
                 user_query = input("\n请输入您的天气查询(输入'quit'或'退出'结束程序): ").strip()
 
                 # 检查退出条件
-                if user_query.lower() in ["quit", "退出"]:
-                    print("感谢使用DeepSeek MCP天气查询系统，再见！")
+                if user_query.lower() in ["q", "quit", "退出"]:
+                    print("退出")
                     break
                 
                 # 验证输入
@@ -356,23 +358,16 @@ class WeatherApp:
         except KeyboardInterrupt:
             print("\n程序被用户中断，正在退出...")
         except Exception as e:
-            print(f"程序运行时发生错误: {e}")
             traceback.print_exc()
 
 async def main():
     """应用程序主入口"""
     app = WeatherApp()
-    
     try:
-        # 设置应用
         await app.setup()
-        
-        # 运行交互式查询循环
         await app.run_interactive()
     finally:
-        # 退出前清理资源
         await app.cleanup()
-        print("程序结束，所有资源已释放。")
 
 # 程序入口
 if __name__ == "__main__":
