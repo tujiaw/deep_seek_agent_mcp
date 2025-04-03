@@ -1,0 +1,10 @@
+{
+    "mcpServers": {
+      "weather_sse": {
+        "url": "http://localhost:8080/sse",
+        "env": {
+          "API_KEY": ""
+        }
+      }
+    }
+  }
