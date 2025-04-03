@@ -1,3 +1,4 @@
-配合天气mcp server使用
-
-https://github.com/sidharthrajaram/mcp-sse.git
+# 启动MCP服务
+```
+uv run python ./mcp_server.py
+```
