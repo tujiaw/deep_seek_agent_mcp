@@ -1,10 +1,9 @@
-import asyncio  # 异步IO支持
-import os  # 系统操作
-import traceback  # 异常堆栈追踪
-import json  # 用于解析JSON文件
-from typing import List, Optional, Union  # 类型提示
+import asyncio
+import os
+import traceback
+import json
+from typing import List, Optional, Union
 
-# 导入Agents SDK相关组件
 from agents import (
     Agent,
     Model,
@@ -15,8 +14,8 @@ from agents import (
     set_tracing_disabled,
     ModelSettings,
 )
-from openai import AsyncOpenAI  # OpenAI异步API客户端
-from openai.types.responses import ResponseTextDeltaEvent, ResponseContentPartDoneEvent  # 响应事件类型
+from openai import AsyncOpenAI
+from openai.types.responses import ResponseTextDeltaEvent, ResponseContentPartDoneEvent
 
 # MCP服务器连接组件
 from agents.mcp import MCPServerSse, MCPServerSseParams, MCPServer, MCPServerStdio, MCPServerStdioParams
