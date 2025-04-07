@@ -40,6 +40,7 @@ async def get_weather(adcode: str) -> Dict:
 
         response = requests.get(NWS_API_BASE, params=params)
         response.raise_for_status()
+        print(response.json())
         return response.json()
     except Exception as e:
         print(f"获取天气信息失败: {str(e)}")
